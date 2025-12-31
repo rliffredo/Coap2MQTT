@@ -90,13 +90,15 @@ class DeviceObserver:
     async def signal_online(self):
         if self.was_online:
             return
-        await self.publisher.publish_online(self.host)
         self.was_online = True
+        logger.info("Device %s is now ONLINE", self.host)
+        await self.publisher.publish_online(self.host)
 
     async def signal_offline(self):
         if not self.was_online:
             return
         self.was_online = False
+        logger.info("Device %s is now OFFLINE", self.host)
         await self.publisher.publish_offline(self.host)
 
 
