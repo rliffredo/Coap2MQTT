@@ -1,0 +1,10 @@
+[project]
+name = "coap2mqtt"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.14"
+dependencies = [
+    "aioairctrl>=0.2.5",
+    "aiomqtt>=2.4.0",
+    "mqtt>=0.0.1",
+]
