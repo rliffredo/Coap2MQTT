@@ -82,7 +82,7 @@ def parse_state(state) -> dict[str, str | int | float | bool | None]:
 		"PreferencesSensorsInStandby": ON_OFF_MAP[state[STANDBY_SENSORS]],
 		"Temperature": state[TEMPERATURE] // 10,
 		"Humidity": state[HUMIDITY],
-		"RemainingFilterPercent": round(state[FILTER_REMAINING_TIME] / state[FILTER_TOTAL_TIME] * 100, 2),
+		"PercentBeforeUnitCleaning": round(state[FILTER_REMAINING_TIME] / state[FILTER_TOTAL_TIME] * 100, 2),
 		"ErrorCode": ERROR_CODES_MAP.get(state[ERROR_CODE], state[ERROR_CODE]),
 	}
 	return parsed_state
