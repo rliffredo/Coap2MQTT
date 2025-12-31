@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import typing
 from contextlib import contextmanager
@@ -7,7 +8,9 @@ from typing import Callable, Coroutine, TypeVar
 from aioairctrl import CoAPClient
 from aiocoap import protocol
 
-from log import logger
+
+logger = logging.getLogger(__name__)
+
 
 if typing.TYPE_CHECKING:
     from publisher import MQTTPublisher

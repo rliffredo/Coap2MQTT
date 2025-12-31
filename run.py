@@ -2,6 +2,9 @@
 import asyncio
 import sys
 
+from log import setup_logging
+setup_logging()
+
 from observer import MultipleDeviceObserver
 from publisher import MQTTPublisher
 

@@ -1,11 +1,13 @@
 import datetime
 import json
+import logging
 from contextlib import asynccontextmanager
 
 import aiomqtt
 
 from philips_hu1508 import parse_state
 
+logger = logging.getLogger(__name__)
 
 class MQTTPublisher:
 	def __init__(self, client: aiomqtt.Client, root: str):

@@ -1,0 +1,36 @@
+version: 1
+
+formatters:
+  complex:
+    format: '%(asctime)s [%(levelname)s] [%(name)s:%(lineno)d] - %(message)s'
+
+handlers:
+  file:
+    class: logging.handlers.RotatingFileHandler
+    formatter: complex
+    level: DEBUG
+    filename: 'logs/coap-mqtt.log'
+    maxBytes: 1048576
+    backupCount: 10
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: complex
+  'null':
+    class: logging.NullHandler
+    level: ERROR
+
+loggers:
+  '':
+    level: DEBUG
+    handlers: [ console, file ]
+
+  coap:
+    level: INFO
+    propagate: false
+    handlers: [ console, file ]
+
+  aioairctrl:
+    level: INFO
+    propagate: false
+    handlers: [ console, file ]
