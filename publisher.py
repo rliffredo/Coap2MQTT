@@ -7,8 +7,8 @@ from contextlib import asynccontextmanager
 import aiomqtt
 from aiomqtt import MqttCodeError
 
-from philips_hu1508 import parse_state
 from configuration import MqttConfig
+from philips import Hu1508
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +46,8 @@ class MQTTPublisher:
 		await self._connect()
 		try:
 			await self.client.publish(f"{self.root}/{host}/{key}", payload=payload)
-		except MqttCodeError as e:
-			logger.error("Could not publish data: [%s]", e)
+		except (MqttCodeError, TypeError) as e:
+			logger.error("Could not publish payload [%s]: [%s]", payload, e)
 			await self._disconnect()
 
 	async def publish_state(self, host, state) -> None:
@@ -55,7 +55,7 @@ class MQTTPublisher:
 		logger.debug("Publishing state for %s: %s", host, raw_state)
 		await self._publish(host, "last_update", datetime.datetime.now().isoformat())
 		await self._publish(host, "raw_state", raw_state)
-		pretty_state = parse_state(state)
+		pretty_state = Hu1508(state).as_dict()
 		last_state = self.last_states.get(host, {})
 		for key, value in pretty_state.items():
 			if value == last_state.get(key, None):
