@@ -8,17 +8,18 @@ import aiomqtt
 from aiomqtt import MqttCodeError
 
 from philips_hu1508 import parse_state
+from configuration import MqttConfig
 
 logger = logging.getLogger(__name__)
 
 class MQTTPublisher:
-	def __init__(self, server: str, port: int, root: str):
+	def __init__(self, config: MqttConfig):
 		self.reconnecting = False
 		self.connected = False
-		self.client = aiomqtt.Client(server, port)
-		self.server = server
-		self.port = port
-		self.root = root
+		self.client = aiomqtt.Client(config.host, config.port)
+		self.server = config.host
+		self.port = config.port
+		self.root = config.root
 		self.last_states = {}
 		self.connection_lock = asyncio.Lock()
 
@@ -70,7 +71,7 @@ class MQTTPublisher:
 
 	@staticmethod
 	@asynccontextmanager
-	async def create(server: str, root: str, port: int = 1883):
-		publisher = MQTTPublisher(server, port, root)
+	async def create(config: MqttConfig):
+		publisher = MQTTPublisher(config)
 		yield publisher
 		await publisher._disconnect()

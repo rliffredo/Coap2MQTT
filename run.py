@@ -15,7 +15,7 @@ async def main():
 	if not (config := get_config()):
 		return
 
-	async with MQTTPublisher.create(config.mqtt_host, config.mqtt_root, config.mqtt_port) as publisher:
+	async with MQTTPublisher.create(config.mqtt) as publisher:
 		with MultipleDeviceObserver.create(config.devices, publisher) as devices:
 			await devices.observe_all()
 

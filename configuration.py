@@ -12,10 +12,11 @@ devices:
   - "192.168.1.101"
   - "192.168.1.102"
   - "192.168.1.103"
-  
-mqtt_host: "mqttbroker"
-mqtt_port: 1883
-mqtt_root: "coap_devices"
+
+mqtt:
+	host: "mqttbroker"
+	port: 1883
+	root: "coap_devices"
 ```
 """
 
@@ -27,21 +28,24 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
+@dataclass
+class MqttConfig:
+	host: str
+	root: str
+	port: int = 1883
 
 @dataclass
 class Config:
 	devices: list[str]
-	mqtt_host: str
-	mqtt_port: int
-	mqtt_root: str
+	mqtt: MqttConfig
 
 
 def get_config() -> Config | None:
 	try:
 		config_file = os.getenv('CONFIG_FILE', 'config.loc.yaml')
 		config_dict = yaml.load(open(config_file).read(), Loader=yaml.FullLoader)
-		checked_config = {k: v for k, v in config_dict.items() if k in Config.__annotations__}
-		configuration = Config(**checked_config)
+		mqtt_config = MqttConfig(**config_dict['mqtt'])
+		configuration = Config(devices=config_dict['devices'], mqtt=mqtt_config)
 		logger.info(f"Loaded configuration: {configuration}")
 		return configuration
 	except (FileNotFoundError, ValueError) as ex:
