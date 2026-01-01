@@ -18,6 +18,9 @@ async def main():
 	async with MQTTPublisher.create(config.mqtt) as publisher:
 		with MultipleDeviceObserver.create(config.devices, publisher) as devices:
 			await devices.observe_all()
+	async with MQTTPublisher.create(config.mqtt) as mqtt_connection:
+		with MultipleDeviceObserver.create(config.devices) as devices:
+			await devices.observe(publisher=mqtt_connection)
 
 
 if __name__ == "__main__":
