@@ -56,11 +56,11 @@ class Hu1508(Device):
 
 	@property
 	def name(self):
-		return self._state[DEVICE_NAME]
+		return self._state.get(DEVICE_NAME, "Unknown")
 
 	@property
 	def power_status(self) -> Hu1508.OnOff:
-		return Hu1508.OnOff(self._state[POWER_STATUS])
+		return Hu1508.OnOff(self._state.get(POWER_STATUS, 0))
 
 	@power_status.setter
 	def power_status(self, value: Hu1508.OnOff):
@@ -69,7 +69,7 @@ class Hu1508(Device):
 
 	@property
 	def mode(self) -> Hu1508.WorkMode:
-		return Hu1508.WorkMode(self._state[WORK_MODE])
+		return Hu1508.WorkMode(self._state.get(WORK_MODE, 0))
 
 	@mode.setter
 	def mode(self, value: Hu1508.WorkMode):
@@ -78,7 +78,7 @@ class Hu1508(Device):
 
 	@property
 	def humidity_target(self) -> int:
-		return self._state[HUMIDITY_TARGET]
+		return self._state.get(HUMIDITY_TARGET, 0)
 
 	@humidity_target.setter
 	def humidity_target(self, value: int):
@@ -87,10 +87,11 @@ class Hu1508(Device):
 
 	@property
 	def lamp_mode(self) -> LampMode:
-		if self._state[LAMP_MODE] == 2:
-			return Hu1508.LampMode(self._state[AMBIENT_LIGHT_MODE] + 10)
+		lamp_mode_ = self._state.get(LAMP_MODE, 0)
+		if lamp_mode_ == 2:
+			return Hu1508.LampMode(self._state.get(AMBIENT_LIGHT_MODE, 0) + 10)
 		else:
-			return Hu1508.LampMode(self._state[LAMP_MODE])
+			return Hu1508.LampMode(lamp_mode_)
 
 	@lamp_mode.setter
 	def lamp_mode(self, value: LampMode):
@@ -104,7 +105,7 @@ class Hu1508(Device):
 
 	@property
 	def brightness(self) -> Hu1508.Brightness:
-		return Hu1508.Brightness(self._state[BRIGHTNESS])
+		return Hu1508.Brightness(self._state.get(BRIGHTNESS, 0))
 
 	@brightness.setter
 	def brightness(self, value: Hu1508.Brightness):
@@ -113,7 +114,7 @@ class Hu1508(Device):
 
 	@property
 	def preferences_beep(self) -> Hu1508.OnOff:
-		return Hu1508.OnOff(self._state[BEEP_STATUS])
+		return Hu1508.OnOff(self._state.get(BEEP_STATUS, 1))
 
 	@preferences_beep.setter
 	def preferences_beep(self, value: Hu1508.OnOff):
@@ -122,7 +123,7 @@ class Hu1508(Device):
 
 	@property
 	def preferences_sensors_in_standby(self) -> Hu1508.OnOff:
-		return Hu1508.OnOff(self._state[STANDBY_SENSORS])
+		return Hu1508.OnOff(self._state.get(STANDBY_SENSORS, 1))
 
 	@preferences_sensors_in_standby.setter
 	def preferences_sensors_in_standby(self, value: Hu1508.OnOff):
@@ -131,22 +132,23 @@ class Hu1508(Device):
 
 	@property
 	def temperature(self) -> int:
-		return self._state[TEMPERATURE] // 10
+		return self._state.get(TEMPERATURE, 0) // 10
 
 	@property
 	def humidity(self) -> int:
-		return self._state[HUMIDITY]
+		return self._state.get(HUMIDITY, 0)
 
 	@property
 	def percent_unit_before_cleaning(self) -> float:
-		return round(self._state[FILTER_REMAINING_TIME] / self._state[FILTER_TOTAL_TIME] * 100, 2)
+		return round(self._state.get(FILTER_REMAINING_TIME, 200) / self._state.get(FILTER_TOTAL_TIME, 200) * 100, 2)
 
 	@property
 	def error(self) -> ErrorStatus | int | None:
-		if self._state[ERROR_CODE] == 0:
+		error_code = self._state.get(ERROR_CODE, 100)
+		if error_code == 0:
 			return None
 		try:
-			return Hu1508.ErrorStatus(self._state[ERROR_CODE])
+			return Hu1508.ErrorStatus(error_code)
 		except ValueError:
-			logger.error("Found unmapped error code: %s", self._state[ERROR_CODE])
-			return self._state[ERROR_CODE]
+			logger.error("Found unmapped error code: %s", error_code)
+			return error_code
