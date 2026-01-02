@@ -151,16 +151,9 @@ class MultipleDeviceBridge:
         await MultipleDeviceBridge._execute_many(lambda client: client.shutdown(), self.clients.values())
 
     @staticmethod
-    async def _execute_many(f: Callable[[T], Coroutine], cont: typing.Iterable[T], timeout: int = 0):
+    async def _execute_many(f: Callable[[T], Coroutine], cont: typing.Iterable[T]):
         async with asyncio.TaskGroup() as task_group:
-            if timeout:
-                coap_tasks = [
-                    task_group.create_task(asyncio.wait_for(f(c), timeout=timeout))
-                    for c in cont
-                ]
-            else:
-                coap_tasks = [task_group.create_task(f(c)) for c in cont]
-
+            coap_tasks = [task_group.create_task(f(c)) for c in cont]
         return [task.result() for task in coap_tasks]
 
     @staticmethod
