@@ -51,7 +51,7 @@ class Connection:
 	async def _publish(self, host: str, key: str, payload: int | float | str | bool | None):
 		await self._connect()
 		try:
-			await self.client.publish(f"{self.root}/{host}/{key}", payload=payload)
+			await self.client.publish(f"{self.root}/{host}/{key}", payload=payload, retain=False)
 		except (MqttCodeError, TypeError) as e:
 			logger.error("Could not publish payload [%s]: [%s]", payload, e)
 			await self._disconnect()
