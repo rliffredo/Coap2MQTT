@@ -1,6 +1,6 @@
 services:
   coap2mqtt:
-    image: coap2mqtt:latest
+    image: ghcr.io/rliffredo/coap2mqtt:latest
     volumes:
       - ./config.loc.yaml:/app/config.prod.yaml
 #      - ./logger.conf.default.yaml:/app/logger.conf.prod.yaml

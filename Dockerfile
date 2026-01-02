@@ -38,3 +38,5 @@ COPY logger.conf.default.yaml /app
 # Set the entrypoint to your run script
 # Using the -u flag for unbuffered logs (essential for Docker logs)
 CMD ["python", "-u", "src/run.py"]
+
+LABEL org.opencontainers.image.source=https://github.com/rliffredo/Coap2MQTT
