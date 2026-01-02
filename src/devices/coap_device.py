@@ -1,3 +1,4 @@
+import inspect
 from enum import Enum, EnumType
 from functools import wraps
 from typing import get_origin, Literal
@@ -5,6 +6,13 @@ from typing import get_origin, Literal
 def ensure_setter_type(f):
 	target_type = f.__annotations__.get("value")
 	assert target_type, f"Setter {f.__name__} has no type annotation, or no 'value' field"
+	if get_origin(target_type) == Literal:
+		target_type = type(target_type.__args__[0])
+	if isinstance(target_type, str):
+		local_type = target_type.split(".")[-1]
+		stack = inspect.stack()
+		caller_frame_types = stack[1].frame.f_locals
+		target_type = caller_frame_types[local_type]
 	@wraps(f)
 	def wrapper(self, value):
 		if target_type and not isinstance(value, target_type):
@@ -22,9 +30,8 @@ class CoapDevice:
 	def update(self, state):
 		self._state = state
 
-	@classmethod
-	def properties(cls):
-		return [k for k, v in cls.__dict__.items() if isinstance(v, property)]
+	def properties(self):
+		return [k for k, v in self.__class__.__dict__.items() if isinstance(v, property)]
 
 	@classmethod
 	def values_for(cls, p):

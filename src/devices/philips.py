@@ -68,7 +68,7 @@ class Hu1508(CoapDevice):
 	@power_status.setter
 	@ensure_setter_type
 	def power_status(self, value: 'Hu1508.OnOff'):
-		if self._state[POWER_STATUS] == value.value:
+		if self.power_status == value:
 			return
 		self._state[POWER_STATUS] = value.value
 		self._add_command(POWER_STATUS)

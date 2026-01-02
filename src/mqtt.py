@@ -13,7 +13,7 @@ from devices import CoapDevice
 from configuration import MqttConfig
 
 if typing.TYPE_CHECKING:
-	from observer import MultipleDeviceBridge
+	from coap_bridge import MultipleDeviceBridge
 
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class Connection:
 		self.server = config.host
 		self.port = config.port
 		self.root = config.root
-		self.last_states = {}
+		self.last_states: dict[str, dict[str, str | int | float | bool | None]] = {}
 		self.connection_lock = asyncio.Lock()
 
 	async def _connect(self):
@@ -48,7 +48,7 @@ class Connection:
 				logger.warning("Could not disconnect, marking it as disconnected anyways. Error: %s", e)
 			self.connected = False
 	
-	async def _publish(self, host: str, key: str, payload: int | float | str):
+	async def _publish(self, host: str, key: str, payload: int | float | str | bool | None):
 		await self._connect()
 		try:
 			await self.client.publish(f"{self.root}/{host}/{key}", payload=payload)
@@ -66,15 +66,17 @@ class Connection:
 						continue
 					try:
 						matches = re.fullmatch(f"{self.root}/(.+)/set/(.+)", message.topic.value)
+						assert matches
 						target_device = matches[1]
 						target_property = matches[2]
+						assert isinstance(message.payload, bytes)
 						value = message.payload.decode()
 					except (IndexError, ValueError) as e:
 						logger.error("Could not parse MQTT message topic: [%s]: [%s]", message.topic, e)
 						continue
 					await publisher.send_update(target_device, target_property, value)
 			except (MqttCodeError, TypeError) as e:
-				logger.error("Error while observing topics: [%s]", e)
+				logger.error("Error while observing topics: [%s]", e, exc_info=e)
 				await self._disconnect()
 
 	async def publish_state(self, host, state: CoapDevice) -> None:

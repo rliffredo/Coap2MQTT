@@ -43,4 +43,4 @@ def setup_logging():
             f'LOGGING WILL NOT WORK CORRECTLY! *****')
 
 
-setup_logging.configured = False
+setup_logging.configured = False  # type: ignore

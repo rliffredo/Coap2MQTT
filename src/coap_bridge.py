@@ -35,7 +35,7 @@ class DeviceBridge:
     
             logger.info(f"Starting new COAP connection to {self.host}")
             try:
-                self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=5)
+                self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=120)
                 logger.info(f"Established new COAP connection to {self.host}")
                 return True
             except asyncio.TimeoutError:
@@ -74,12 +74,13 @@ class DeviceBridge:
         watchdog_task = asyncio.create_task(self._start_watchdog(publisher))
         while self.running:
             await self.ensure_connected_client()
+            assert self.client is not None, "Client is connected now"
             await self.signal_online(publisher)
             try:
                 async for status in self.client.observe_status():
                     await self.signal_state(status, publisher)
             except ValueError:
-                logger.warning(f"Skipping status of device %s because of validation error", self.host)
+                logger.warning("Skipping current status update of device %s because of validation error", self.host)
                 await self._disconnect()
                 await self.signal_offline(publisher)
 
@@ -114,16 +115,23 @@ class DeviceBridge:
         await publisher.publish_offline(self.host)
 
     async def send_update(self, property_name, new_value: str):
-        logger.debug("Got update for %s to %s", property_name, self.host)
+        logger.debug("Got update for %s -> %s to %s", property_name, new_value, self.host)
+        if property_name not in self.state.properties():
+            logger.warning("Update failed, property %s not found for %s", property_name, self.host)
+            return
         setattr(self.state, property_name, new_value)
         commands = self.state.get_commands()
+        if not commands:
+            logger.warning("Update failed, no commands to send for %s", self.host)
+            return
         await self.ensure_connected_client()
+        assert self.client is not None, "Client is connected now"
         try:
             logger.debug("Sending command %s to %s", commands, self.host)
             for command in commands:
                 await self.client.set_control_values(data=command)
         except ValueError as e:
-            logger.warning(f"Skipping sending command [%s] to device %s: %s", commands, self.host, e)
+            logger.warning("Skipping sending command [%s] to device %s: %s", commands, self.host, e)
 
 
 class MultipleDeviceBridge:
@@ -133,7 +141,7 @@ class MultipleDeviceBridge:
         self.clients = {host: DeviceBridge(host, device_name) for host, device_name in hosts}
 
     async def send_update(self, device: str, property_name: str, new_value: str):
-        await self.clients_[device].send_update(property_name, new_value)
+        await self.clients[device].send_update(property_name, new_value)
 
     async def observe(self, publisher: 'mqtt.Connection') -> None:
         logger.info("Started to observe status")
