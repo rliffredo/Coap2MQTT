@@ -1,7 +1,8 @@
 import logging
 from enum import Enum
+from typing import Literal
 
-from coap_device import Device, ensure_setter_type
+from .coap_device import CoapDevice, ensure_setter_type
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +20,10 @@ HUMIDITY = "D03125"
 FILTER_TOTAL_TIME = "D05207"
 FILTER_REMAINING_TIME = "D0520D"
 ERROR_CODE = "D03240"
+RUNTIME = "Runtime"
 
-class Hu1508(Device):
+
+class Hu1508(CoapDevice):
 	class OnOff(Enum):
 		OFF = 0
 		ON = 1
@@ -65,6 +68,8 @@ class Hu1508(Device):
 	@power_status.setter
 	@ensure_setter_type
 	def power_status(self, value: 'Hu1508.OnOff'):
+		if self._state[POWER_STATUS] == value.value:
+			return
 		self._state[POWER_STATUS] = value.value
 		self._add_command(POWER_STATUS)
 
@@ -75,8 +80,9 @@ class Hu1508(Device):
 	@mode.setter
 	@ensure_setter_type
 	def mode(self, value: 'Hu1508.WorkMode'):
+		self.power_status = Hu1508.OnOff.ON
 		self._state[WORK_MODE] = value.value
-		# self._add_command(WORK_MODE)
+		self._add_command([WORK_MODE])
 
 	@property
 	def humidity_target(self) -> Literal[40, 50, 60, 70]:
@@ -85,8 +91,9 @@ class Hu1508(Device):
 	@humidity_target.setter
 	@ensure_setter_type
 	def humidity_target(self, value: Literal[40, 50, 60, 70]):
+		self.power_status = Hu1508.OnOff.ON
 		self._state[HUMIDITY_TARGET] = value
-		self._add_command(HUMIDITY_TARGET)
+		self._add_command([HUMIDITY_TARGET])
 
 	@property
 	def lamp_mode(self) -> LampMode:
@@ -99,6 +106,7 @@ class Hu1508(Device):
 	@lamp_mode.setter
 	@ensure_setter_type
 	def lamp_mode(self, value: 'Hu1508.LampMode'):
+		self.power_status = Hu1508.OnOff.ON
 		if value.value > 10:
 			self._state[LAMP_MODE] = 2
 			self._state[AMBIENT_LIGHT_MODE] = value.value - 10
@@ -114,8 +122,9 @@ class Hu1508(Device):
 	@brightness.setter
 	@ensure_setter_type
 	def brightness(self, value: 'Hu1508.Brightness'):
+		self.power_status = Hu1508.OnOff.ON
 		self._state[BRIGHTNESS] = value.value
-		# self._add_command(BRIGHTNESS)
+		self._add_command([BRIGHTNESS])
 
 	@property
 	def preferences_beep(self) -> 'Hu1508.OnOff':
@@ -159,3 +168,8 @@ class Hu1508(Device):
 		except ValueError:
 			logger.error("Found unmapped error code: %s", error_code)
 			return error_code
+
+	@property
+	def runtime_seconds(self) -> int:
+		# Runtime is expressed in milliseconds
+		return int(self._state.get(RUNTIME, 0)) // 1000

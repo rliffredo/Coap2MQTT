@@ -9,16 +9,16 @@ from contextlib import asynccontextmanager
 import aiomqtt
 from aiomqtt import MqttCodeError
 
+from devices import CoapDevice
 from configuration import MqttConfig
-from philips import Hu1508
 
 if typing.TYPE_CHECKING:
-	from observer import MultipleDeviceObserver
+	from observer import MultipleDeviceBridge
 
 
 logger = logging.getLogger(__name__)
 
-class MQTTPublisher:
+class Connection:
 	def __init__(self, config: MqttConfig):
 		self.reconnecting = False
 		self.connected = False
@@ -56,7 +56,7 @@ class MQTTPublisher:
 			logger.error("Could not publish payload [%s]: [%s]", payload, e)
 			await self._disconnect()
 
-	async def observe(self, publisher: 'MultipleDeviceObserver') -> None:
+	async def observe(self, publisher: 'MultipleDeviceBridge') -> None:
 		while True:
 			await self._connect()
 			try:
@@ -65,7 +65,7 @@ class MQTTPublisher:
 					if not message.payload:
 						continue
 					try:
-						matches = re.fullmatch("coap_devices/(.+)/set/(.+)", message.topic.value)
+						matches = re.fullmatch(f"{self.root}/(.+)/set/(.+)", message.topic.value)
 						target_device = matches[1]
 						target_property = matches[2]
 						value = message.payload.decode()
@@ -77,7 +77,7 @@ class MQTTPublisher:
 				logger.error("Error while observing topics: [%s]", e)
 				await self._disconnect()
 
-	async def publish_state(self, host, state: Hu1508) -> None:
+	async def publish_state(self, host, state: CoapDevice) -> None:
 		raw_json = json.dumps(state.raw)
 		logger.debug("Publishing state for %s: %s", host, raw_json)
 		await self._publish(host, "last_update", datetime.datetime.now().isoformat())
@@ -100,6 +100,6 @@ class MQTTPublisher:
 	@staticmethod
 	@asynccontextmanager
 	async def create(config: MqttConfig):
-		publisher = MQTTPublisher(config)
+		publisher = Connection(config)
 		yield publisher
 		await publisher._disconnect()

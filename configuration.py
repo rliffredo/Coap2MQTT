@@ -9,9 +9,9 @@ Example content:
 version: 1
 
 devices:
-  - "192.168.1.101"
-  - "192.168.1.102"
-  - "192.168.1.103"
+  - ["192.168.1.101", "philips_hu15xx"]
+  - ["192.168.1.102", "philips_hu15xx"]
+  - ["192.168.1.103", "philips_hu15xx"]
 
 mqtt:
 	host: "mqttbroker"

@@ -7,18 +7,18 @@ setup_logging()
 import asyncio
 
 from configuration import get_config
-from observer import MultipleDeviceObserver
-from publisher import MQTTPublisher
+from coap_bridge import MultipleDeviceBridge
+import mqtt
 
 
 async def main():
 	if not (config := get_config()):
 		return
 
-	async with MQTTPublisher.create(config.mqtt) as mqtt_connection:
-		with MultipleDeviceObserver.create(config.devices) as devices:
-			asyncio.create_task(mqtt_connection.observe(publisher=devices))
-			await devices.observe(publisher=mqtt_connection)
+	async with mqtt.Connection.create(config.mqtt) as mqtt_connection:
+		async with MultipleDeviceBridge.create(config.devices) as devices_bridge:
+			asyncio.create_task(mqtt_connection.observe(publisher=devices_bridge))
+			await devices_bridge.observe(publisher=mqtt_connection)
 
 
 if __name__ == "__main__":

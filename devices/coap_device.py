@@ -14,10 +14,13 @@ def ensure_setter_type(f):
 	return wrapper
 
 
-class Device:
-	def __init__(self, state):
-		self._state = state
+class CoapDevice:
+	def __init__(self):
+		self._state = {}
 		self._commands = []
+
+	def update(self, state):
+		self._state = state
 
 	@classmethod
 	def properties(cls):
