@@ -5,11 +5,13 @@ from log import setup_logging
 setup_logging()
 
 import asyncio
-import logging
+from logging import getLogger
 
 from configuration import get_config
 from coap_bridge import MultipleDeviceBridge
 import mqtt
+
+logger = getLogger(__name__)
 
 
 async def main():
@@ -23,7 +25,7 @@ async def main():
 				await devices_bridge.observe(publisher=mqtt_connection)
 	except asyncio.CancelledError:
 		# This is expected during shutdown
-		logging.info("Main loop cancelled, shutting down...")
+		logger.info("Main loop cancelled, shutting down...")
 
 
 if __name__ == "__main__":

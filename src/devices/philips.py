@@ -40,8 +40,8 @@ class Hu1508(CoapDevice):
 	class LampMode(Enum):
 		Off = 0
 		Humidity = 1
-		AmbientLight = 2
-		NoAmbientLight = 10
+		# AmbientLight = 2
+		# NoAmbientLight = 10
 		Warm = 11
 		Dawn = 12
 		Calm = 13

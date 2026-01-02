@@ -3,10 +3,11 @@ import logging
 import time
 import typing
 from contextlib import asynccontextmanager
-from typing import Callable, Coroutine, TypeVar
+from typing import Any, AsyncGenerator, Callable, Coroutine, TypeVar
 
 from aioairctrl import CoAPClient
 from aiocoap import protocol
+from aiocoap.error import LibraryShutdown
 
 import devices
 
@@ -62,6 +63,7 @@ class DeviceBridge:
             if self.was_online and not self.is_online:
                 logger.warning(f"No updates for {self.host} in the last 60 seconds: setting to offline")
                 await self.signal_offline(publisher)
+                await self._disconnect()
             await asyncio.sleep(60)
 
     async def shutdown(self) -> None:
@@ -73,12 +75,11 @@ class DeviceBridge:
         await self.signal_offline(publisher)
         watchdog_task = asyncio.create_task(self._start_watchdog(publisher))
         while self.running:
-            await self.ensure_connected_client()
-            assert self.client is not None, "Client is connected now"
-            await self.signal_online(publisher)
             try:
-                async for status in self.client.observe_status():
+                async for status in await self._observe_status(publisher):
                     await self.signal_state(status, publisher)
+            except LibraryShutdown:
+                logger.warning("Shutdown in progress on %s, try to reconnect again", self.host)
             except ValueError:
                 logger.warning("Skipping current status update of device %s because of validation error", self.host)
                 await self._disconnect()
@@ -124,14 +125,23 @@ class DeviceBridge:
         if not commands:
             logger.warning("Update failed, no commands to send for %s", self.host)
             return
-        await self.ensure_connected_client()
-        assert self.client is not None, "Client is connected now"
         try:
             logger.debug("Sending command %s to %s", commands, self.host)
             for command in commands:
-                await self.client.set_control_values(data=command)
+                await self._set_control_values(command)
         except ValueError as e:
             logger.warning("Skipping sending command [%s] to device %s: %s", commands, self.host, e)
+
+    async def _observe_status(self, publisher) -> AsyncGenerator[Any, Any]:
+        await self.ensure_connected_client()
+        # await self.signal_online(publisher)
+        assert self.client is not None, "Client is connected now"
+        return self.client.observe_status()
+
+    async def _set_control_values(self, command):
+        await self.ensure_connected_client()
+        assert self.client is not None, "Client is connected now"
+        await self.client.set_control_values(data=command)
 
 
 class MultipleDeviceBridge:
