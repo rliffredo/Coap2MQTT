@@ -1,0 +1,10 @@
+services:
+  coap2mqtt:
+    image: coap2mqtt:latest
+    volumes:
+      - ./config.loc.yaml:/app/config.prod.yaml
+#      - ./logger.conf.default.yaml:/app/logger.conf.prod.yaml
+      - ./logs:/app/logs
+    environment:
+      - CONFIG_FILE=config.prod.yaml
+#      - LOG_CONFIG_FILE=logger.conf.prod.yaml

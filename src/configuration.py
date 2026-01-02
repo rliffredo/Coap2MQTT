@@ -43,7 +43,8 @@ class Config:
 def get_config() -> Config | None:
 	try:
 		config_file = os.getenv('CONFIG_FILE', 'config.loc.yaml')
-		config_dict = yaml.load(open(config_file).read(), Loader=yaml.FullLoader)
+		with open(config_file) as f_config:
+			config_dict = yaml.load(f_config, Loader=yaml.FullLoader)
 		mqtt_config = MqttConfig(**config_dict['mqtt'])
 		configuration = Config(devices=config_dict['devices'], mqtt=mqtt_config)
 		logger.info(f"Loaded configuration: {configuration}")
