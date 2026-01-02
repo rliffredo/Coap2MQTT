@@ -22,32 +22,32 @@ class DeviceObserver:
         self.host = host
         self.client: CoAPClient | None = None
         self.last_update = time.monotonic()
+        self.state = philips.Hu1508({})
         self.was_online = True
         self.running = True
 
-    async def _connect(self, publisher) -> None:
+    async def _connect(self) -> bool:
+        # TODO: better synchronization!
         if self.client:
             logger.info("Client already connected")
-            return
-
-        await self.signal_offline(publisher)
+            return True
 
         logger.info(f"Starting new COAP connection to {self.host}")
         try:
             self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=120)
-            await self.signal_online(publisher)
             logger.info(f"Established new COAP connection to {self.host}")
+            return True
         except asyncio.TimeoutError:
             logger.error(f"Timeout while trying to establish connection to {self.host}")
-            await self._shutdown(publisher)
+            await self._shutdown()
+            return False
         except protocol.error.NetworkError as e:
             logger.error(f"Error while trying to establish connection to {self.host}: {e}")
-            await self._shutdown(publisher)
+            await self._shutdown()
             await asyncio.sleep(10)
+            return False
 
-    async def _shutdown(self, publisher):
-        if publisher:
-            await self.signal_offline(publisher)
+    async def _shutdown(self):
         if not self.client:
             return
         await self.client.shutdown()
@@ -63,21 +63,28 @@ class DeviceObserver:
 
     async def stop(self) -> None:
         self.running = False
-        await self._shutdown(publisher=None)
+        await self._shutdown()
 
     async def observe(self, publisher: 'MQTTPublisher'):
         logger.info("Observing device %s", self.host)
+        await self.signal_offline(publisher)
         watchdog_task = asyncio.create_task(self._start_watchdog(publisher))
         while self.running:
-            while not self.client:
-                await self._connect(publisher)
+            await self.ensure_connected_client()
+            await self.signal_online(publisher)
             try:
                 async for status in self.client.observe_status():
                     await self.signal_state(status, publisher)
             except ValueError:
                 logger.warning(f"Skipping status of device %s because of validation error", self.host)
-                await self._shutdown(publisher)
+                await self._shutdown()
+                await self.signal_offline(publisher)
+
         await watchdog_task  # do we really need to wait for it to complete?
+
+    async def ensure_connected_client(self):
+        while not self.client:
+            await self._connect()
 
     @property
     def is_online(self) -> CoAPClient | None | bool:
@@ -85,8 +92,9 @@ class DeviceObserver:
 
     async def signal_state(self, status, publisher):
         self.last_update = time.monotonic()
+        self.state = philips.Hu1508(status)
         await self.signal_online(publisher)
-        await publisher.publish_state(self.host, status)
+        await publisher.publish_state(self.host, self.state)
 
     async def signal_online(self, publisher):
         if self.was_online:
@@ -100,8 +108,19 @@ class DeviceObserver:
             return
         self.was_online = False
         logger.info("Device %s is now OFFLINE", self.host)
-        await self.publisher.publish_offline(self.host)
         await publisher.publish_offline(self.host)
+
+    async def send_update(self, property_name, new_value: str):
+        logger.debug("Got update for %s to %s", property_name, self.host)
+        setattr(self.state, property_name, new_value)
+        commands = self.state.get_commands()
+        await self.ensure_connected_client()
+        try:
+            logger.debug("Sending command %s to %s", commands, self.host)
+            for command in commands:
+                await self.client.set_control_values(data=command)
+        except ValueError as e:
+            logger.warning(f"Skipping sending command [%s] to device %s: %s", commands, self.host, e)
 
 
 T = TypeVar('T')
@@ -112,7 +131,9 @@ class MultipleDeviceObserver:
         self.clients = [DeviceObserver(host) for host in hosts]
         self.clients_ = {host: DeviceObserver(host) for host in hosts}
 
-    async def observe_all(self) -> None:
+    async def send_update(self, device: str, property_name: str, new_value: str):
+        await self.clients_[device].send_update(property_name, new_value)
+
     async def observe(self, publisher: 'MQTTPublisher') -> None:
         logger.info("Started to observe status")
         await MultipleDeviceObserver._execute_many(lambda client: client.observe(publisher), self.clients)

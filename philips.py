@@ -1,7 +1,7 @@
 import logging
 from enum import Enum
 
-from coap_device import Device
+from coap_device import Device, ensure_setter_type
 
 logger = logging.getLogger(__name__)
 
@@ -63,27 +63,30 @@ class Hu1508(Device):
 		return Hu1508.OnOff(self._state.get(POWER_STATUS, 0))
 
 	@power_status.setter
-	def power_status(self, value: Hu1508.OnOff):
+	@ensure_setter_type
+	def power_status(self, value: 'Hu1508.OnOff'):
 		self._state[POWER_STATUS] = value.value
 		self._add_command(POWER_STATUS)
 
 	@property
-	def mode(self) -> Hu1508.WorkMode:
+	def mode(self) -> 'Hu1508.WorkMode':
 		return Hu1508.WorkMode(self._state.get(WORK_MODE, 0))
 
 	@mode.setter
-	def mode(self, value: Hu1508.WorkMode):
+	@ensure_setter_type
+	def mode(self, value: 'Hu1508.WorkMode'):
 		self._state[WORK_MODE] = value.value
 		# self._add_command(WORK_MODE)
 
 	@property
-	def humidity_target(self) -> int:
-		return self._state.get(HUMIDITY_TARGET, 0)
+	def humidity_target(self) -> Literal[40, 50, 60, 70]:
+		return self._state.get(HUMIDITY_TARGET, 40)
 
 	@humidity_target.setter
-	def humidity_target(self, value: int):
+	@ensure_setter_type
+	def humidity_target(self, value: Literal[40, 50, 60, 70]):
 		self._state[HUMIDITY_TARGET] = value
-		# self._add_command(HUMIDITY_TARGET)
+		self._add_command(HUMIDITY_TARGET)
 
 	@property
 	def lamp_mode(self) -> LampMode:
@@ -94,7 +97,8 @@ class Hu1508(Device):
 			return Hu1508.LampMode(lamp_mode_)
 
 	@lamp_mode.setter
-	def lamp_mode(self, value: LampMode):
+	@ensure_setter_type
+	def lamp_mode(self, value: 'Hu1508.LampMode'):
 		if value.value > 10:
 			self._state[LAMP_MODE] = 2
 			self._state[AMBIENT_LIGHT_MODE] = value.value - 10
@@ -104,29 +108,32 @@ class Hu1508(Device):
 		self._add_command([LAMP_MODE, AMBIENT_LIGHT_MODE])
 
 	@property
-	def brightness(self) -> Hu1508.Brightness:
+	def brightness(self) -> 'Hu1508.Brightness':
 		return Hu1508.Brightness(self._state.get(BRIGHTNESS, 0))
 
 	@brightness.setter
-	def brightness(self, value: Hu1508.Brightness):
+	@ensure_setter_type
+	def brightness(self, value: 'Hu1508.Brightness'):
 		self._state[BRIGHTNESS] = value.value
 		# self._add_command(BRIGHTNESS)
 
 	@property
-	def preferences_beep(self) -> Hu1508.OnOff:
+	def preferences_beep(self) -> 'Hu1508.OnOff':
 		return Hu1508.OnOff(self._state.get(BEEP_STATUS, 1))
 
 	@preferences_beep.setter
-	def preferences_beep(self, value: Hu1508.OnOff):
+	@ensure_setter_type
+	def preferences_beep(self, value: 'Hu1508.OnOff'):
 		self._state[BEEP_STATUS] = value.value
 		self._add_command(BEEP_STATUS)
 
 	@property
-	def preferences_sensors_in_standby(self) -> Hu1508.OnOff:
+	def preferences_sensors_in_standby(self) -> 'Hu1508.OnOff':
 		return Hu1508.OnOff(self._state.get(STANDBY_SENSORS, 1))
 
 	@preferences_sensors_in_standby.setter
-	def preferences_sensors_in_standby(self, value: Hu1508.OnOff):
+	@ensure_setter_type
+	def preferences_sensors_in_standby(self, value: 'Hu1508.OnOff'):
 		self._state[STANDBY_SENSORS] = value.value
 		self._add_command(STANDBY_SENSORS)
 
@@ -143,7 +150,7 @@ class Hu1508(Device):
 		return round(self._state.get(FILTER_REMAINING_TIME, 200) / self._state.get(FILTER_TOTAL_TIME, 200) * 100, 2)
 
 	@property
-	def error(self) -> ErrorStatus | int | None:
+	def error(self) -> 'Hu1508.ErrorStatus | int | None':
 		error_code = self._state.get(ERROR_CODE, 100)
 		if error_code == 0:
 			return None

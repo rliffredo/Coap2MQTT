@@ -1,5 +1,17 @@
 from enum import Enum, EnumType
+from functools import wraps
 from typing import get_origin, Literal
+
+def ensure_setter_type(f):
+	target_type = f.__annotations__.get("value")
+	assert target_type, f"Setter {f.__name__} has no type annotation, or no 'value' field"
+	@wraps(f)
+	def wrapper(self, value):
+		if target_type and not isinstance(value, target_type):
+			value = target_type(value)
+		return f(self, value)
+
+	return wrapper
 
 
 class Device:
@@ -39,3 +51,8 @@ class Device:
 			return value.name if isinstance(value, Enum) else value
 
 		return {prop_name: get_value(prop_name) for prop_name in self.properties()}
+
+	@property
+	def raw(self):
+		return self._state
+

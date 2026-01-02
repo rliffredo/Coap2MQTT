@@ -2,6 +2,8 @@ import asyncio
 import datetime
 import json
 import logging
+import re
+import typing
 from contextlib import asynccontextmanager
 
 import aiomqtt
@@ -9,6 +11,10 @@ from aiomqtt import MqttCodeError
 
 from configuration import MqttConfig
 from philips import Hu1508
+
+if typing.TYPE_CHECKING:
+	from observer import MultipleDeviceObserver
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,16 +56,38 @@ class MQTTPublisher:
 			logger.error("Could not publish payload [%s]: [%s]", payload, e)
 			await self._disconnect()
 
-	async def publish_state(self, host, state) -> None:
-		raw_state = json.dumps(state)
-		logger.debug("Publishing state for %s: %s", host, raw_state)
+	async def observe(self, publisher: 'MultipleDeviceObserver') -> None:
+		while True:
+			await self._connect()
+			try:
+				await self.client.subscribe(f"{self.root}/+/set/#")
+				async for message in self.client.messages:
+					if not message.payload:
+						continue
+					try:
+						matches = re.fullmatch("coap_devices/(.+)/set/(.+)", message.topic.value)
+						target_device = matches[1]
+						target_property = matches[2]
+						value = message.payload.decode()
+					except (IndexError, ValueError) as e:
+						logger.error("Could not parse MQTT message topic: [%s]: [%s]", message.topic, e)
+						continue
+					await publisher.send_update(target_device, target_property, value)
+			except (MqttCodeError, TypeError) as e:
+				logger.error("Error while observing topics: [%s]", e)
+				await self._disconnect()
+
+	async def publish_state(self, host, state: Hu1508) -> None:
+		raw_json = json.dumps(state.raw)
+		logger.debug("Publishing state for %s: %s", host, raw_json)
 		await self._publish(host, "last_update", datetime.datetime.now().isoformat())
-		await self._publish(host, "raw_state", raw_state)
-		pretty_state = Hu1508(state).as_dict()
+		await self._publish(host, "raw_state", raw_json)
 		last_state = self.last_states.get(host, {})
+		pretty_state = state.as_dict()
 		for key, value in pretty_state.items():
 			if value == last_state.get(key, None):
 				continue
+			logger.debug("Publishing attribute %s/%s: %s", host, key, value)
 			await self._publish(host, key, value)
 		self.last_states[host] = pretty_state
 
