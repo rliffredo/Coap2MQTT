@@ -162,8 +162,8 @@ class Hu1508(CoapDevice):
 
 	@property
 	def error(self) -> 'Hu1508.ErrorStatus | int | None':
-		error_code = self._state.get(ERROR_CODE, 100)
-		if error_code == 0:
+		error_code = self._state.get(ERROR_CODE, 0)
+		if not error_code:
 			return None
 		try:
 			return Hu1508.ErrorStatus(error_code)
