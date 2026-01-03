@@ -20,7 +20,7 @@ async def main():
 
 	try:
 		async with mqtt.Connection.create(config.mqtt) as mqtt_connection:
-			async with MultipleDeviceBridge.create(config.devices) as devices_bridge:
+			async with MultipleDeviceBridge.create(config.coap) as devices_bridge:
 				asyncio.create_task(mqtt_connection.observe(publisher=devices_bridge))
 				await devices_bridge.observe(publisher=mqtt_connection)
 	except asyncio.CancelledError:

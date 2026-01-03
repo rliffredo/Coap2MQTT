@@ -11,6 +11,7 @@ from aiocoap import protocol
 from aiocoap.error import LibraryShutdown
 
 import devices
+from configuration import CoapConfig
 from devices.coap_device import CoapStatus
 from mqtt import Connection
 
@@ -22,7 +23,7 @@ if typing.TYPE_CHECKING:
 
 
 class DeviceBridge:
-    def __init__(self, host: str, device_name: str):
+    def __init__(self, host: str, device_name: str, connection_timeout, status_timeout):
         self.observe_wait: Future | None = None
         self.cycle_time = 30
         self.host = host
@@ -33,6 +34,8 @@ class DeviceBridge:
         self.running = True
         self.client_connection_lock = asyncio.Lock()
         self.request_in_progress = False
+        self.connection_timeout = connection_timeout
+        self.status_timeout = status_timeout
 
     async def _connect(self) -> bool:
         if self.client:
@@ -42,7 +45,7 @@ class DeviceBridge:
         async with self.client_connection_lock:    
             logger.info(f"Starting new COAP connection to {self.host}")
             try:
-                self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=120)
+                self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=self.connection_timeout)
                 logger.info(f"Established new COAP connection to {self.host}")
                 return True
             except asyncio.TimeoutError:
@@ -63,8 +66,8 @@ class DeviceBridge:
             await self.client.shutdown()
             self.client = None
 
-    async def _start_watchdog(self, timeout, publisher) -> None:
-        await asyncio.sleep(timeout)
+    async def _request_watchdog(self, publisher) -> None:
+        await asyncio.sleep(self.status_timeout )
         # No one cancelled the task, so we should set to offline
         logger.warning(f"No updates for {self.host} in the last 60 seconds: setting to offline")
         await self.signal_offline(publisher)
@@ -96,7 +99,7 @@ class DeviceBridge:
         self.request_in_progress = True
         logger.debug("Requesting status for %s", self.host)
         status, max_age = await self._get_status(publisher)
-        logger.debug("Got status for %s: %s...", self.host, str(status)[:80])
+        logger.debug("Got status for %s: %s...", self.host, str(status)[:60])
         await self.signal_state(status, publisher)
         self.cycle_time = max(10, max_age-10)
         self.request_in_progress = False
@@ -150,7 +153,7 @@ class DeviceBridge:
 
     async def _get_status(self, publisher) -> tuple[CoapStatus, int]:
         try:
-            watchdog = asyncio.create_task(self._start_watchdog(120, publisher))
+            watchdog = asyncio.create_task(self._request_watchdog(publisher))
             await self.ensure_connected_client()
             assert self.client is not None, "Client is connected now"
             values = await self.client.get_status()
@@ -174,8 +177,11 @@ class DeviceBridge:
 class MultipleDeviceBridge:
     T = TypeVar('T')
 
-    def __init__(self, hosts: list[tuple[str, str]]):
-        self.clients = {host: DeviceBridge(host, device_name) for host, device_name in hosts}
+    def __init__(self, config: CoapConfig):
+        self.clients = {
+            host: DeviceBridge(host, device_name, config.connection_timeout, config.status_timeout)
+            for host, device_name in config.devices
+        }
 
     async def send_update(self, device: str, property_name: str, new_value: str):
         await self.clients[device].send_update(property_name, new_value)
@@ -195,7 +201,7 @@ class MultipleDeviceBridge:
 
     @staticmethod
     @asynccontextmanager
-    async def create(hosts: list[tuple[str, str]]):
-        client = MultipleDeviceBridge(hosts)
+    async def create(config: CoapConfig):
+        client = MultipleDeviceBridge(config)
         yield client
         await client.shutdown()

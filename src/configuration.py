@@ -8,10 +8,13 @@ Example content:
 ```yaml
 version: 1
 
-devices:
-  - ["192.168.1.101", "philips_hu15xx"]
-  - ["192.168.1.102", "philips_hu15xx"]
-  - ["192.168.1.103", "philips_hu15xx"]
+coap:
+	devices:
+	  - ["192.168.1.101", "philips_hu15xx"]
+	  - ["192.168.1.102", "philips_hu15xx"]
+	  - ["192.168.1.103", "philips_hu15xx"]
+	connection_timeout: 120
+	status_timeout: 120
 
 mqtt:
 	host: "mqttbroker"
@@ -29,6 +32,12 @@ import yaml
 logger = logging.getLogger(__name__)
 
 @dataclass
+class CoapConfig:
+	devices: list[tuple[str, str]]
+	status_timeout: int = 120
+	connection_timeout: int = 120
+
+@dataclass
 class MqttConfig:
 	host: str
 	root: str
@@ -36,8 +45,8 @@ class MqttConfig:
 
 @dataclass
 class Config:
-	devices: list[str]
 	mqtt: MqttConfig
+	coap: CoapConfig
 
 
 def get_config() -> Config | None:
@@ -46,7 +55,8 @@ def get_config() -> Config | None:
 		with open(config_file) as f_config:
 			config_dict = yaml.load(f_config, Loader=yaml.FullLoader)
 		mqtt_config = MqttConfig(**config_dict['mqtt'])
-		configuration = Config(devices=config_dict['devices'], mqtt=mqtt_config)
+		coap_config = CoapConfig(**config_dict['coap'])
+		configuration = Config(coap=coap_config, mqtt=mqtt_config)
 		logger.info(f"Loaded configuration: {configuration}")
 		return configuration
 	except (FileNotFoundError, ValueError) as ex:

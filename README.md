@@ -7,21 +7,17 @@ Developed on Python 3.14, but there should not be any hard requirements against 
 
 ## Local Setup
 
-1. **Clone the repository:**
+1. **Clone the repository and install dependencies:**
    ```bash
    git clone <your-repo-url>
    cd Coap2MQTT
-   ```
-
-2. **Install dependencies:**
-   ```bash
    uv sync
    ```
 
-3. **Configure the application:**
+2. **Configure the application:**
    Create a `config.loc.yaml` file in the root directory (see [Configuration](#configuration) below).
 
-4. **Run the application:**
+3. **Run the application:**
    ```bash
    uv run src/run.py
    ```
@@ -35,6 +31,7 @@ The simplest way to run the bridge is using Docker Compose.
 
 2. **Build and start:**
    ```bash
+   docker compose pull
    docker compose up -d
    ```
 
@@ -54,17 +51,26 @@ It defines the definition of devices to connect, as well as the MQTT broker conf
 
 Example file:
 ```yaml
-devices:
-  - ["192.168.1.101", "philips_hu15xx"]
-  - ["192.168.1.102", "philips_hu15xx"]
+version: 1
+
+coap:
+   devices:
+      - [ "192.168.1.101", "philips_hu15xx" ]
+      - [ "192.168.1.102", "philips_hu15xx" ]
+      - [ "192.168.1.103", "philips_hu15xx" ]
+   connection_timeout: 120
+   status_timeout: 120
 
 mqtt:
-  host: "your-mqtt-broker-ip"
-  port: 1883
-  root: "coap_devices"
+   host: "mqttbroker"
+   port: 1883
+   root: "coap_devices"
 ```
 
 Note that at the moment, only Philips HU15xx devices are supported/implemented.
+
+Also, short connection timeouts are **not** recommended, as it will most probably corrupt the connection stack to a
+state where it will not reconnect any longer (at least, with the Philips devices I tested).
 
 ### Log configuration
 There is already a default log configuration, but it can be overridden by using the environment variable
