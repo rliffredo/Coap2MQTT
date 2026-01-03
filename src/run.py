@@ -29,4 +29,8 @@ async def main():
 
 
 if __name__ == "__main__":
-	asyncio.run(main())
+	try:
+		asyncio.run(main())
+	except KeyboardInterrupt:
+		# Gracefully exit on Ctrl+C without showing a traceback
+		logger.info("Service stopped by user.")

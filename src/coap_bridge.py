@@ -2,14 +2,17 @@ import asyncio
 import logging
 import time
 import typing
+from asyncio import Future
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable, Coroutine, TypeVar
+from typing import Callable, Coroutine, TypeVar
 
 from aioairctrl import CoAPClient
 from aiocoap import protocol
 from aiocoap.error import LibraryShutdown
 
 import devices
+from devices.coap_device import CoapStatus
+from mqtt import Connection
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,8 @@ if typing.TYPE_CHECKING:
 
 class DeviceBridge:
     def __init__(self, host: str, device_name: str):
+        self.observe_wait: Future | None = None
+        self.cycle_time = 30
         self.host = host
         self.client: CoAPClient | None = None
         self.last_update = time.monotonic()
@@ -27,13 +32,14 @@ class DeviceBridge:
         self.was_online = True
         self.running = True
         self.client_connection_lock = asyncio.Lock()
+        self.request_in_progress = False
 
     async def _connect(self) -> bool:
-        async with self.client_connection_lock:
-            if self.client:
-                logger.info("Client already connected")
-                return True
-    
+        if self.client:
+            logger.info("Client already connected")
+            return True
+
+        async with self.client_connection_lock:    
             logger.info(f"Starting new COAP connection to {self.host}")
             try:
                 self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=120)
@@ -57,43 +63,47 @@ class DeviceBridge:
             await self.client.shutdown()
             self.client = None
 
-    async def _start_watchdog(self, publisher) -> None:
-        logger.info("Starting watchdog loop for %s", self.host)
-        while self.running:
-            if self.was_online and not self.is_online:
-                logger.warning(f"No updates for {self.host} in the last 60 seconds: setting to offline")
-                await self.signal_offline(publisher)
-                await self._disconnect()
-            await asyncio.sleep(60)
+    async def _start_watchdog(self, timeout, publisher) -> None:
+        await asyncio.sleep(timeout)
+        # No one cancelled the task, so we should set to offline
+        logger.warning(f"No updates for {self.host} in the last 60 seconds: setting to offline")
+        await self.signal_offline(publisher)
+        await self._disconnect()
 
     async def shutdown(self) -> None:
         self.running = False
         await self._disconnect()
 
+    async def _cycle_sleep(self):
+        async def sleep():
+            try:
+                await asyncio.sleep(self.cycle_time)
+            except asyncio.CancelledError:
+                pass
+        self.observe_wait = asyncio.create_task(sleep())
+        await self.observe_wait
+
     async def observe(self, publisher: 'mqtt.Connection'):
         logger.info("Observing device %s", self.host)
         await self.signal_offline(publisher)
-        watchdog_task = asyncio.create_task(self._start_watchdog(publisher))
-        while self.running:
-            try:
-                async for status in await self._observe_status(publisher):
-                    await self.signal_state(status, publisher)
-            except LibraryShutdown:
-                logger.warning("Shutdown in progress on %s, try to reconnect again", self.host)
-            except ValueError:
-                logger.warning("Skipping current status update of device %s because of validation error", self.host)
-                await self._disconnect()
-                await self.signal_offline(publisher)
+        while True:
+            await self.update_status_from_device(publisher)
+            await self._cycle_sleep()
 
-        await watchdog_task  # do we really need to wait for it to complete?
+    async def update_status_from_device(self, publisher: Connection) -> None:
+        if self.request_in_progress:
+            return
+        self.request_in_progress = True
+        logger.debug("Requesting status for %s", self.host)
+        status, max_age = await self._get_status(publisher)
+        logger.debug("Got status for %s: %s...", self.host, str(status)[:80])
+        await self.signal_state(status, publisher)
+        self.cycle_time = max(10, max_age-10)
+        self.request_in_progress = False
 
     async def ensure_connected_client(self):
         while not self.client:
             await self._connect()
-
-    @property
-    def is_online(self) -> CoAPClient | None | bool:
-        return self.client and time.monotonic() - self.last_update < 60
 
     async def signal_state(self, status, publisher):
         self.last_update = time.monotonic()
@@ -116,27 +126,44 @@ class DeviceBridge:
         await publisher.publish_offline(self.host)
 
     async def send_update(self, property_name, new_value: str):
-        logger.debug("Got update for %s -> %s to %s", property_name, new_value, self.host)
-        if property_name not in self.state.properties():
-            logger.warning("Update failed, property %s not found for %s", property_name, self.host)
-            return
-        setattr(self.state, property_name, new_value)
-        commands = self.state.get_commands()
-        if not commands:
-            logger.warning("Update failed, no commands to send for %s", self.host)
-            return
         try:
-            logger.debug("Sending command %s to %s", commands, self.host)
-            for command in commands:
-                await self._set_control_values(command)
-        except ValueError as e:
-            logger.warning("Skipping sending command [%s] to device %s: %s", commands, self.host, e)
+            logger.debug("Got update for %s -> %s to %s", property_name, new_value, self.host)
+            if property_name not in self.state.properties():
+                logger.warning("Cannot update, property %s not found for %s", property_name, self.host)
+                return
+            setattr(self.state, property_name, new_value)
+            commands = self.state.get_commands()
+            if not commands:
+                logger.warning("Update failed, no commands to send for %s", self.host)
+                return
+            try:
+                logger.debug("Sending command %s to %s", commands, self.host)
+                for command in commands:
+                    await self._set_control_values(command)
+                # await self.update_status_from_device()
+                if self.observe_wait:
+                    self.observe_wait.cancel()
+            except (ValueError, LibraryShutdown) as e:
+                logger.warning("Skipping sending command [%s] to device %s: %s", commands, self.host, e)
+        except Exception as e:
+            logger.exception("Error while sending command to device %s: %s", self.host, e, exc_info=e)
 
-    async def _observe_status(self, publisher) -> AsyncGenerator[Any, Any]:
-        await self.ensure_connected_client()
-        # await self.signal_online(publisher)
-        assert self.client is not None, "Client is connected now"
-        return self.client.observe_status()
+    async def _get_status(self, publisher) -> tuple[CoapStatus, int]:
+        try:
+            watchdog = asyncio.create_task(self._start_watchdog(120, publisher))
+            await self.ensure_connected_client()
+            assert self.client is not None, "Client is connected now"
+            values = await self.client.get_status()
+            watchdog.cancel()
+            return values
+        except LibraryShutdown:
+            logger.warning("Shutdown in progress on %s, try to reconnect again", self.host)
+            return {}, 0
+        except ValueError:
+            logger.warning("Skipping current status update of device %s because of validation error", self.host)
+            await self._disconnect()
+            await self.signal_offline(publisher)
+            return {}, 0
 
     async def _set_control_values(self, command):
         await self.ensure_connected_client()

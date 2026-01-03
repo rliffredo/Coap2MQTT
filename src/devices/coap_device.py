@@ -3,7 +3,8 @@ from enum import Enum, EnumType
 from functools import wraps
 from typing import get_origin, Literal
 
-CoapStatus = dict[str, int | float | str]
+CoapStatusValue = int | float | str
+CoapStatus = dict[str, CoapStatusValue]
 
 
 def ensure_setter_type(f):
@@ -29,14 +30,14 @@ def ensure_setter_type(f):
 
 
 class CoapDevice:
-	def __init__(self):
+	def __init__(self) -> None:
 		self._state: CoapStatus = {}
-		self._commands = []
+		self._commands: list[dict[str, CoapStatusValue]] = []
 
-	def update(self, state: CoapStatus):
+	def update(self, state: CoapStatus) -> None:
 		self._state = state
 
-	def properties(self):
+	def properties(self) -> list[str]:
 		return [k for k, v in self.__class__.__dict__.items() if isinstance(v, property)]
 
 	@classmethod
@@ -51,12 +52,12 @@ class CoapDevice:
 			return [n.value for n in rtype]
 		return [f"<{rtype}>"]
 
-	def _add_command(self, fields):
+	def _add_command(self, fields: list[str] | str) -> None:
 		if not isinstance(fields, list):
 			fields = [fields]
 		self._commands.append({field: self._state[field] for field in fields})
 
-	def get_commands(self):
+	def get_commands(self) -> list[dict[str, CoapStatusValue]]:
 		command_queue = self._commands
 		self._commands = []
 		return command_queue

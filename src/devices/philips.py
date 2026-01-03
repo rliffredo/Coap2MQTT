@@ -86,7 +86,7 @@ class Hu1508(CoapDevice):
 
 	@property
 	def humidity_target(self) -> Literal[40, 50, 60, 70]:
-		return self._state.get(HUMIDITY_TARGET, 40)
+		return self._state.get(HUMIDITY_TARGET, 40)  # type: ignore
 
 	@humidity_target.setter
 	@ensure_setter_type
@@ -99,7 +99,7 @@ class Hu1508(CoapDevice):
 	def lamp_mode(self) -> LampMode:
 		lamp_mode_ = self._state.get(LAMP_MODE, 0)
 		if lamp_mode_ == 2:
-			return Hu1508.LampMode(self._state.get(AMBIENT_LIGHT_MODE, 0) + 10)
+			return Hu1508.LampMode(self._state.get(AMBIENT_LIGHT_MODE, 0) + 10)  # type: ignore
 		else:
 			return Hu1508.LampMode(lamp_mode_)
 
@@ -148,15 +148,17 @@ class Hu1508(CoapDevice):
 
 	@property
 	def temperature(self) -> int:
-		return self._state.get(TEMPERATURE, 0) // 10
+		return int(self._state.get(TEMPERATURE, 0)) // 10
 
 	@property
 	def humidity(self) -> int:
-		return self._state.get(HUMIDITY, 0)
+		return int(self._state.get(HUMIDITY, 0))
 
 	@property
 	def percent_unit_before_cleaning(self) -> float:
-		return round(self._state.get(FILTER_REMAINING_TIME, 200) / self._state.get(FILTER_TOTAL_TIME, 200) * 100, 2)
+		remaining_time = int(self._state.get(FILTER_REMAINING_TIME, 200))
+		total_time = int(self._state.get(FILTER_TOTAL_TIME, 200))
+		return round(remaining_time / total_time * 100, 2)
 
 	@property
 	def error(self) -> 'Hu1508.ErrorStatus | int | None':
@@ -167,7 +169,7 @@ class Hu1508(CoapDevice):
 			return Hu1508.ErrorStatus(error_code)
 		except ValueError:
 			logger.error("Found unmapped error code: %s", error_code)
-			return error_code
+			return int(error_code)
 
 	@property
 	def runtime_seconds(self) -> int:
