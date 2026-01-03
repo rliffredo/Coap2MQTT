@@ -21,9 +21,12 @@ def ensure_setter_type(f):
 	def wrapper(self, value):
 		if target_type and not isinstance(value, target_type):
 			if issubclass(target_type, Enum):
-				intermediate_type = type(next(iter(target_type)).value)
-				value = intermediate_type(value)
-			value = target_type(value)
+				new_value = next((v for v in target_type if v.name == value), None)
+				if new_value is None:
+					raise ValueError(f"Invalid value for enum {target_type}: {value}")
+				value = new_value
+			else:
+				value = target_type(value)
 		return f(self, value)
 
 	return wrapper
