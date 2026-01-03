@@ -3,6 +3,9 @@ from enum import Enum, EnumType
 from functools import wraps
 from typing import get_origin, Literal
 
+CoapStatus = dict[str, int | float | str]
+
+
 def ensure_setter_type(f):
 	target_type = f.__annotations__.get("value")
 	assert target_type, f"Setter {f.__name__} has no type annotation, or no 'value' field"
@@ -16,6 +19,9 @@ def ensure_setter_type(f):
 	@wraps(f)
 	def wrapper(self, value):
 		if target_type and not isinstance(value, target_type):
+			if issubclass(target_type, Enum):
+				intermediate_type = type(next(iter(target_type)).value)
+				value = intermediate_type(value)
 			value = target_type(value)
 		return f(self, value)
 
@@ -24,10 +30,10 @@ def ensure_setter_type(f):
 
 class CoapDevice:
 	def __init__(self):
-		self._state = {}
+		self._state: CoapStatus = {}
 		self._commands = []
 
-	def update(self, state):
+	def update(self, state: CoapStatus):
 		self._state = state
 
 	def properties(self):
@@ -63,6 +69,6 @@ class CoapDevice:
 		return {prop_name: get_value(prop_name) for prop_name in self.properties()}
 
 	@property
-	def raw(self):
+	def raw(self) -> CoapStatus:
 		return self._state
 
