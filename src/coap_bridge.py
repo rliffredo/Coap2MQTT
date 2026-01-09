@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from typing import Callable, Coroutine, TypeVar
 
 from aioairctrl import CoAPClient
+from aioairctrl.coap.encryption import DigestMismatchException
 from aiocoap import protocol
 from aiocoap.error import LibraryShutdown
 
@@ -45,7 +46,10 @@ class DeviceBridge:
         async with self.client_connection_lock:    
             logger.info(f"Starting new COAP connection to {self.host}")
             try:
-                self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=self.connection_timeout)
+                if self.connection_timeout > 0:
+                    self.client = await asyncio.wait_for(CoAPClient.create(host=self.host), timeout=self.connection_timeout)
+                else:
+                    self.client = await CoAPClient.create(host=self.host)
                 logger.info(f"Established new COAP connection to {self.host}")
                 return True
             except asyncio.TimeoutError:
@@ -162,7 +166,7 @@ class DeviceBridge:
         except LibraryShutdown:
             logger.warning("Shutdown in progress on %s, try to reconnect again", self.host)
             return {}, 0
-        except ValueError:
+        except (ValueError, DigestMismatchException):
             logger.warning("Skipping current status update of device %s because of validation error", self.host)
             await self._disconnect()
             await self.signal_offline(publisher)
